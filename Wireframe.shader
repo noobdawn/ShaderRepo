@@ -41,7 +41,7 @@
 #ifdef _DIVIDE_ON
             [maxvertexcount(10)]
 #else 
-            [maxvertexcount(3)]
+            [maxvertexcount(4)]
 #endif
             void geom(triangle v2g p[3], inout LineStream<g2f> lineStream)
             {
@@ -63,6 +63,7 @@
                 lineStream.Append(r[0]);
                 lineStream.Append(r[1]);
                 lineStream.Append(r[2]);
+                lineStream.Append(r[0]);
 #endif
             }
 
