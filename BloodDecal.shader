@@ -9,6 +9,8 @@ Shader "Custom/BloodDecal"
     {
         Tags { "Queue"="Geometry+1" }
         
+        ZTest Always
+        Cull Front
         ZWrite Off
         Blend SrcAlpha OneMinusSrcAlpha
 
