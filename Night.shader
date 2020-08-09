@@ -1,4 +1,4 @@
-﻿Shader "Custom/Night"
+Shader "Custom/Night"
 {
 	Properties
 	{
@@ -27,6 +27,9 @@
 
 		[Header(Moon Setting)]
 		_MoonRad("Moon Radius", Range(0, 1)) = 0.3
+
+		[Header(Mountain Setting)]
+		_MountainColor("Mountain Color",Color) = (1,1,1,1)
 	}
 
 	CGINCLUDE
@@ -34,12 +37,12 @@
 	#define _DEG_2_RAD 0.01745
 	#define _STEP_COUNT 10
 	#define _MAX_STEP_LENGTH 0.5
-	#define _CLOUD_HEIGHT 2
+	#define _CLOUD_HEIGHT 1
 	#define _CLOUD_THICKNESS 2.5
 	#define _G .6
 	#define _G2 0.36
 	#define _PHASE_1 0.8
-	#define _LIGHT_STEP_COUNT 5
+	#define _LIGHT_STEP_COUNT 10
 
 	#include "UnityCG.cginc"
 	#include "NoiseLib.cginc"
@@ -69,6 +72,8 @@
 	half _CloudAmount, _CloudDensity, _CloudSpeed;
 
 	half _MoonRad;
+
+	half4 _MountainColor;
 
 	// 带状极光
 	// From https://www.shadertoy.com/view/XtGGRt
@@ -114,7 +119,7 @@
 			pt -= of;
 			float3 bpos = ro + pt*rd;
 			float2 p = bpos.zx;
-			float rzt = triNoise2d(p, 0.06);
+			float rzt = triNoise2d(p, _AuroraSpeed);
 			float4 col2 = float4(0,0,0, rzt);
 			col2.rgb = (sin(1.-float3(2.15,-.5, 1.2)+i * 0.043 * _AuroraColorSeed)*0.5+0.5)*rzt;
 			avgCol =  lerp(avgCol, col2, .5);
@@ -132,10 +137,24 @@
 			_Time.y * 3 + _SinTime.y,
 			0,
 			0) * _CloudSpeed;
-		float n0 = pnoise_fbm(seed, 1, 4, 2, 0.5) * 0.5 + 0.5;
+		float n0 = pnoise_fbm(seed, 1, 2, 2, 0.6) * 0.5 + 0.5;
+		float n1 = wnoise(seed, 0.1) * 0.5 + 0.5;
+		n1 = pow(n1, 2);
+		float n = 3 * n1 * n0 * smoothstep(0,_CLOUD_THICKNESS * 0.1, abs(_CLOUD_THICKNESS * 0.5 - seed.y));
+		n = saturate(n - 3 + 3 * _CloudAmount);
+		return n;
+	}
+	float getCloudAtPoint_l(float3 p)
+	{
+		float3 seed = p + float3(0, -_CLOUD_HEIGHT, 0);
+		seed += float3(
+			_Time.y * 3 + _SinTime.y,
+			0,
+			0) * _CloudSpeed;
+		float n0 = 0.75;// pnoise(seed, 1) * 0.5 + 0.5;
 		float n1 = wnoise(seed, 0.3) * 0.5 + 0.5;
 		n1 = pow(n1, 3);
-		float n = 3 * n1 * n0 * smoothstep(0,_CLOUD_THICKNESS * 0.1, abs(_CLOUD_THICKNESS * 0.5 - seed.y));
+		float n = 3 * n1 * n0 * smoothstep(0, 0.25, abs(_CLOUD_THICKNESS * 0.5 - seed.y));
 		n = saturate(n - 3 + 3 * _CloudAmount);
 		return n;
 	}
@@ -161,11 +180,18 @@
 		for (int i = 0; i < _LIGHT_STEP_COUNT; i++)
 		{
 			pos = rayInPoint + (i + 0.5) * step * ld;
-			float c = getCloudAtPoint(pos);
-			l *= exp(-c * _PHASE_1 * step * _CloudDensity);
+			float c = getCloudAtPoint_l(pos);
+			l *= exp(-c * _PHASE_1 * step * _CloudDensity * 5);
 		}
 		l *= ph;
-		return lerp(_Color1, _LightColor0.xyz, l);
+		// 在最外围做一次蚀刻
+		float3 seed = rayInPoint + float3(0, -_CLOUD_HEIGHT, 0);
+		seed += float3(
+			_Time.y * 3 + _SinTime.y,
+			0,
+			0) * _CloudSpeed;
+		float n = pnoise_fbm(seed, 4, 2, 2, 0.5) * 0.5 + 0.5;
+		return lerp(_Color1, _LightColor0.xyz, l * max(0.5, n));
 	}
 
 	float4 cloud(float3 n)
@@ -187,8 +213,7 @@
 		rgb /= _STEP_COUNT;
 		c = saturate(c);
 		return float4(rgb, c);
-	}
-	
+	}	
 
 	v2f vert(appdata v)
 	{
@@ -211,6 +236,7 @@
 
 		// 斗转星移
 		float3 r = ntexcoord * 50;
+		r.y = abs(r.y);
 		float3 rn = normalize(float3(1, tan(_Latitude * _DEG_2_RAD), 0));
 		float c = cos(_Time.x * _StarRotateSpeed);
 		float s = sin(_Time.x * _StarRotateSpeed);
@@ -227,7 +253,6 @@
 			rn.z * rn.z * u + c
 		);
 		r = mul(r, m);
-		r.y = abs(r.y);
 		// 繁星若雨
 		float3 grid = floor(r);
 		float starNoise = pnoise(r * 4, 1) * 0.5 + 0.5;
@@ -247,12 +272,20 @@
 		half4 moonCol = half4(_LightColor0.xyz, 0);
 		moonCol.a = smoothstep(1 - _MoonRad * 0.011, 1 - _MoonRad * 0.01 , saturate(dot(_WorldSpaceLightPos0.xyz, n)));
 		
+		// 远山如墨
+		n.y = 0;
+		n = normalize(n);
+		float mountainHeight = pnoise_fbm(n, 4, 2, 1.5, 0.8) * 0.5 + 0.3;
+		mountainHeight *= 0.2;
+		mountainHeight *= (pnoise_fbm(n, 16, 4, 2, 0.6) * 0.5 + 0.5);
+		half4 mountainCol = half4(_MountainColor.rgb, mountainHeight > abs(p) ? 1 : 0);
 
 		// 组合
 		half4 finalCol = baseCol + starCol;
 		finalCol.rgb = lerp(finalCol.rgb, moonCol.rgb, moonCol.a);
 		finalCol.rgb = lerp(finalCol.rgb, auroraCol.rgb, auroraCol.a);
 		finalCol.rgb = lerp(finalCol.rgb, cloudCol.rgb, cloudCol.a);
+		finalCol.rgb = lerp(finalCol.rgb, mountainCol.rgb, mountainCol.a);
 		// 用幂函数模拟菲涅尔定律
 		finalCol *= p >= 0 ? 1 : 1 - pow(abs(p), 0.4);
 		return finalCol;
