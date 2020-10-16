@@ -188,6 +188,7 @@ public static class MapTileTheme
                 right = rts.x,
                 top = rts.y,
             });
+            infos1.Clear();
         }
 
         rts = t;
@@ -223,6 +224,7 @@ public static class MapTileTheme
                 right = rts.x,
                 top = rts.y,
             });
+            infos2.Clear();
         }
 
         rts = t;
@@ -258,6 +260,7 @@ public static class MapTileTheme
                 right = rts.x,
                 top = rts.y,
             });
+            infos3.Clear();
         }
         // 筛选尺寸最小的那个
         if (rt1.width * rt1.height <= rt2.width * rt2.height && rt1.width * rt1.height <= rt3.width * rt3.height)
