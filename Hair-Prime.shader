@@ -61,10 +61,9 @@
 				UNITY_INITIALIZE_OUTPUT(v2f, o);
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-				//o.tangent = mul(unity_ObjectToWorld, v.tangent);
-				o.normal = mul(unity_ObjectToWorld, v.normal);
-				o.bitangent = mul(unity_ObjectToWorld, cross(v.normal, v.tangent));
-				//错误写法：o.bitangent = cross(o.normal, o.tangent);
+				o.normal = UnityObjectToWorldNormal(v.normal);
+				o.tangent = UnityObjectToWorldDir(v.tangent.xyz);
+				o.bitangent = cross(v.normal, v.tangent) * v.tangent.w * unity_WorldTransformParams.w;
 				o.pos = mul(unity_ObjectToWorld, v.vertex);
 				return o;
 			}
