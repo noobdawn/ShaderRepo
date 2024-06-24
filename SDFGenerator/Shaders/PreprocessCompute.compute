@@ -1,0 +1,24 @@
+#pragma kernel Preprocess
+
+RWTexture2D<float4> Source;
+RWTexture2D<float4> Target;
+int Channel;
+int Invert;
+float Threshold;
+
+[numthreads(8,8,1)]
+void Preprocess(uint3 id : SV_DispatchThreadID)
+{
+    // Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    float4 color = Source[id.xy];
+    float value = 0;
+    if (Channel == 0) value = color.r;
+    if (Channel == 1) value = color.g;
+    if (Channel == 2) value = color.b;
+    if (Channel == 3) value = color.a;
+    if (Channel == 4) value = (color.r * 0.299 + color.g * 0.587 + color.b * 0.114);
+    if (Invert == 1) value = 1 - value;
+    if (value < Threshold) value = 0;
+    else value = 1;
+    Target[id.xy] = float4(value, value, value, 1);    
+}

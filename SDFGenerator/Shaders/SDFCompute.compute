@@ -1,0 +1,79 @@
+#pragma kernel SaitoHorizon
+#pragma kernel SaitoVertical
+#pragma kernel Interpolation
+#pragma kernel Sum
+
+RWTexture2D<float4> Source;
+RWTexture2D<float4> Result;
+RWTexture2D<float4> Shadow0;
+RWTexture2D<float4> Shadow1;
+int width;
+int height;
+int lower;
+int upper;
+int sumTime;
+float pixelSize;
+
+[numthreads(8,8,1)]
+void SaitoHorizon(uint3 id : SV_DispatchThreadID)
+{
+    // Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    float4 color = Source[id.xy];
+    if (color.r == 0.0)
+    {
+        Result[id.xy] = float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+    
+    int dist = 0;
+    while (dist < width)
+    {
+        dist++;
+        if ((int)id.x + dist < width && Source[uint2(id.x + dist, id.y)].r == 0.0)
+            break;
+        if ((int)id.x - dist >= 0 && Source[uint2(id.x - dist, id.y)].r == 0.0)
+            break;
+        if ((int) id.x + dist >= width &&
+            (int) id.x - dist < 0)
+            break;
+    }
+    dist = dist * dist;
+    Result[id.xy] = float4(dist, dist, dist, 1.0);
+}
+
+[numthreads(8,8,1)]
+void SaitoVertical(uint3 id : SV_DispatchThreadID)
+{
+    float4 color = Source[id.xy];
+    if (color.r == 0.0)
+    {
+        Result[id.xy] = float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+    float minDist = Source[uint2(id.x, 0)].r + (float)(id.y * id.y);
+    for (int i = 1; i < height; i++)
+    {
+        float a = Source[uint2(id.x, i)].r;
+        float b = i - (int)id.y;
+        minDist = min(minDist, a + b * b);
+    }
+    float sdf = sqrt(minDist) * pixelSize;
+    Result[id.xy] = float4(sdf, sdf, sdf, 1.0);
+}
+
+[numthreads(8,8,1)]
+void Interpolation(uint3 id : SV_DispatchThreadID)
+{
+    float dist0 = Shadow0[id.xy].x;
+    float dist1 = Shadow1[id.xy].x;
+    float r = dist0 / (dist0 + dist1);
+    Result[id.xy] = float4(r, r, r, 1);
+}
+
+[numthreads(8, 8, 1)]
+void Sum(uint3 id : SV_DispatchThreadID)
+{
+    float dist = Source[id.xy].x;
+    float r = dist / sumTime;
+    Result[id.xy] += float4(r, r, r, 1);
+}
